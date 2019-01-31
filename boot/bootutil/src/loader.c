@@ -40,6 +40,8 @@
 
 #include "mcuboot_config/mcuboot_config.h"
 
+MCUBOOT_LOG_MODULE_DECLARE(mcuboot);
+
 static struct boot_loader_state boot_data;
 
 #if defined(MCUBOOT_VALIDATE_SLOT0) && !defined(MCUBOOT_OVERWRITE_ONLY)
@@ -985,10 +987,14 @@ boot_status_init(const struct flash_area *fap, const struct boot_status *bs)
 
 #ifndef MCUBOOT_OVERWRITE_ONLY
 static int
-boot_erase_last_sector(const struct flash_area *fap)
+boot_erase_trailer_sectors(const struct flash_area *fap)
 {
     uint8_t slot;
-    uint32_t last_sector;
+    uint32_t sector;
+    uint32_t trailer_sz;
+    uint32_t total_sz;
+    uint32_t off;
+    uint32_t sz;
     int rc;
 
     switch (fap->fa_id) {
@@ -1002,11 +1008,19 @@ boot_erase_last_sector(const struct flash_area *fap)
         return BOOT_EFLASH;
     }
 
-    last_sector = boot_img_num_sectors(&boot_data, slot) - 1;
-    rc = boot_erase_sector(fap,
-            boot_img_sector_off(&boot_data, slot, last_sector),
-            boot_img_sector_size(&boot_data, slot, last_sector));
-    assert(rc == 0);
+    /* delete starting from last sector and moving to beginning */
+    sector = boot_img_num_sectors(&boot_data, slot) - 1;
+    trailer_sz = boot_slots_trailer_sz(BOOT_WRITE_SZ(&boot_data));
+    total_sz = 0;
+    do {
+        sz = boot_img_sector_size(&boot_data, slot, sector);
+        off = boot_img_sector_off(&boot_data, slot, sector);
+        rc = boot_erase_sector(fap, off, sz);
+        assert(rc == 0);
+
+        sector--;
+        total_sz += sz;
+    } while (total_sz < trailer_sz);
 
     return rc;
 }
@@ -1084,7 +1098,7 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_status *bs)
                  * last sector is not being used by the image data so it's
                  * safe to erase.
                  */
-                rc = boot_erase_last_sector(fap_slot0);
+                rc = boot_erase_trailer_sectors(fap_slot0);
                 assert(rc == 0);
 
                 boot_status_init(fap_slot0, bs);
@@ -1107,7 +1121,7 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_status *bs)
             /* If not all sectors of the slot are being swapped,
              * guarantee here that only slot0 will have the state.
              */
-            rc = boot_erase_last_sector(fap_slot1);
+            rc = boot_erase_trailer_sectors(fap_slot1);
             assert(rc == 0);
         }
 
@@ -1523,7 +1537,7 @@ boot_swap_if_needed(int *out_swap_type)
 
     /* If a partial swap was detected, complete it. */
     if (bs.idx != BOOT_STATUS_IDX_0 || bs.state != BOOT_STATUS_STATE_0) {
-#if MCUBOOT_OVERWRITE_ONLY
+#ifdef MCUBOOT_OVERWRITE_ONLY
         /* Should never arrive here, overwrite-only mode has no swap state. */
         assert(0);
 #else
@@ -1547,7 +1561,7 @@ boot_swap_if_needed(int *out_swap_type)
         case BOOT_SWAP_TYPE_TEST:
         case BOOT_SWAP_TYPE_PERM:
         case BOOT_SWAP_TYPE_REVERT:
-#if MCUBOOT_OVERWRITE_ONLY
+#ifdef MCUBOOT_OVERWRITE_ONLY
             rc = boot_copy_image(&bs);
 #else
             rc = boot_swap_image(&bs);
