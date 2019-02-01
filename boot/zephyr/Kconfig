@@ -140,7 +140,7 @@ config BOOT_HAVE_LOGGING
 	select LOG_IMMEDIATE
 	help
 	  If y, enables logging on the serial port. The log level can
-	  be defined by setting `LOG_DEFAULT_LEVEL`.
+	  be defined by setting `CONFIG_MCUBOOT_LOG_LEVEL_*`.
 	  If unsure, leave at the default value.
 
 menuconfig MCUBOOT_SERIAL
@@ -224,6 +224,11 @@ config MCUBOOT_DEVICE_CPU_CORTEX_M0
 	bool
 	default n
 	select SW_VECTOR_RELAY if !CPU_CORTEX_M0_HAS_VECTOR_TABLE_REMAP
+
+module = MCUBOOT
+module-dep = LOG
+module-str = Log level for MCUBOOT application
+source "subsys/logging/Kconfig.template.log_config"
 
 comment "Zephyr configuration options"
 

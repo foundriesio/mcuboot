@@ -22,6 +22,7 @@
 #define MCUBOOT_LOG_INF(...) LOG_INF(__VA_ARGS__)
 #define MCUBOOT_LOG_DBG(...) LOG_DBG(__VA_ARGS__)
 
+#define LOG_LEVEL CONFIG_MCUBOOT_LOG_LEVEL
 #include <logging/log.h>
 
 #endif /* !__BOOTSIM__ */
